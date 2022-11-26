@@ -1,0 +1,190 @@
+---
+title: "Adameyko"
+output: html_document
+date: "2022-09-21"
+---
+```{r}
+#install.packages("Seurat")
+```
+
+
+```{r}
+#Load and pre-process data from h5 files from cellranger
+library(hdf5r)
+library(dplyr)
+library(Seurat)
+library(patchwork)
+library(readxl)
+```
+```{r}
+#install.packages("readxl")
+```
+
+```{r}
+adrenal_whole = new.env()
+adrenal_whole$SR = readRDS("data/Seurat/adrenal.human.seurat.scrublet.rds")
+
+adrenal_medulla = new.env()
+
+dim(adrenal_whole$SR@meta.data)
+
+adrenal_whole$SR@meta.data <- adrenal_whole$SR@meta.data %>% 
+  mutate(keep=ifelse(fate %in% c("sympathoblasts", "SCP","chromaffin"), 1, 0))
+
+adrenal_medulla$SR = adrenal_whole$SR[ , adrenal_whole$SR@meta.data$keep] 
+
+#dim(adrenal_medulla$SR)
+#[1] 26105  4856
+#> dim(adrenal_whole$SR)
+#[1] 26105 74401
+
+rm(adrenal_whole)
+gc()
+
+l_cluster_annotation = list(24,
+                            33,
+                            c(0,41,22),
+                            c(22,40)
+                           )
+names(l_cluster_annotation) = c('SCP', 'cycling', 'sympathoblasts', 'chromaffin')
+
+adrenal_medulla$SR@meta.data$fate = 'other'
+
+for(i in 1:length(l_cluster_annotation)){
+    adrenal_medulla$SR@meta.data$fate[adrenal_medulla$SR@meta.data$seurat_clusters %in% l_cluster_annotation[[i]] ] = names(l_cluster_annotation)[i]
+}
+
+library(rbokeh)
+
+figure(legend_location=NULL) %>% ly_points(adrenal_medulla$SR@reductions$umap@cell.embeddings[,1],
+                       adrenal_medulla$SR@reductions$umap@cell.embeddings[,2],
+                       color=adrenal_medulla$SR@meta.data$fate,
+                       lname = 'points') %>%
+ tool_lasso_select(custom_callback(
+        "var inds = cb_obj.get('selected')['1d'].indices;
+        var d1 = cb_obj.get('data');
+        console.log(inds.join());
+        console.log(cb_obj.get('selected')['1d']);
+        console.log(window.top.IPython.notebook.kernel.id);
+        window.top.IPython.notebook.kernel.execute('selected=\"'+inds.join()+'\"');
+        "), ref_layer='points')
+
+sel_ids = as.numeric(strsplit('selected', ',')[[1]])+1
+cat(paste(sel_ids, collapse=','), '')
+plot(adrenal_medulla$SR@reductions$umap@cell.embeddings[,1],
+     adrenal_medulla$SR@reductions$umap@cell.embeddings[,2],
+     col = ifelse(1:ncol(adrenal_medulla$SR) %in% (sel_ids), 'red', 'gray'),
+     xlab='UMAP_1', ylab='UMAP_2', pch=19
+)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+metadata = read_xlsx("samples.xlsx")
+metadata
+```
+
+```{r}
+print(metadata$filename)
+```
+
+```{r}
+#1
+adrenal_whole = new.env()
+l_SR = list()
+for(i in 1:nrow(metadata)){
+    print(metadata$filename[i])
+    SR_data = Read10X_h5(paste0('GSE147821_RAW/', metadata$filename[i]))}
+```
+
+```{r}
+#2
+for(i in 1:nrow(metadata)){
+ l_SR[[i]] = CreateSeuratObject(counts = SR_data, project = metadata$id[i], min.cells = 3, min.features = 200)
+    l_SR[[i]]@meta.data$timepoint = metadata$timepoint[i]}
+```
+
+```{r}
+#3
+adrenal_whole$SR <- merge(l_SR[[1]], y = l_SR[2:length(l_SR)], 
+                    add.cell.ids = metadata$prefix, project = "adrenal")
+
+rm(SR_data, l_SR)
+gc()
+
+adrenal_whole$SR
+```
+
+
+
+
+```{r}
+adrenal_whole = new.env()
+l_SR = list()
+for(i in 1:13){
+    print(metadata$filename[i])
+    SR_data = Read10X_h5(paste0('GSE147821_RAW/', metadata$filename[i]))
+    l_SR[[i]] = CreateSeuratObject(counts = SR_data, project = metadata$id[i], min.cells = 3, min.features = 200)
+    l_SR[[i]]@meta.data$timepoint = metadata$timepoint[i]
+}
+
+adrenal_whole$SR <- merge(l_SR[[1]], y = l_SR[[2]], 
+                    add.cell.ids = metadata$prefix[1:2], project = "adrenal")
+
+adrenal_whole$SR <- merge(adrenal_whole$SR, y = l_SR[[3]], 
+                    add.cell.ids = c("", metadata$prefix[3]), project = "adrenal")
+
+adrenal_whole$SR <- merge(adrenal_whole$SR, y = l_SR[[4]], 
+                    add.cell.ids = c("", metadata$prefix[4]), project = "adrenal")
+
+adrenal_whole$SR <- merge(adrenal_whole$SR, y = l_SR[[5]], 
+                    add.cell.ids = c("", metadata$prefix[5]), project = "adrenal")
+
+adrenal_whole$SR <- merge(adrenal_whole$SR, y = l_SR[[6]], 
+                    add.cell.ids = c("", metadata$prefix[6]), project = "adrenal")
+
+adrenal_whole$SR <- merge(adrenal_whole$SR, y = l_SR[[7]], 
+                    add.cell.ids = c("", metadata$prefix[7]), project = "adrenal")
+
+adrenal_whole$SR <- merge(adrenal_whole$SR, y = l_SR[[8]], 
+                    add.cell.ids = c("", metadata$prefix[8]), project = "adrenal")
+
+adrenal_whole$SR <- merge(adrenal_whole$SR, y = l_SR[[9]], 
+                    add.cell.ids = c("", metadata$prefix[9]), project = "adrenal")
+
+adrenal_whole$SR <- merge(adrenal_whole$SR, y = l_SR[[10]], 
+                    add.cell.ids = c("", metadata$prefix[10]), project = "adrenal")
+
+adrenal_whole$SR <- merge(adrenal_whole$SR, y = l_SR[11], 
+                    add.cell.ids = c("", metadata$prefix[11]), project = "adrenal")
+
+adrenal_whole$SR <- merge(adrenal_whole$SR, y = l_SR[[12]], 
+                    add.cell.ids = c("", metadata$prefix[12]), project = "adrenal")
+
+adrenal_whole$SR <- merge(adrenal_whole$SR, y = l_SR[[13]], 
+                    add.cell.ids = c("", metadata$prefix[13]), project = "adrenal")
+
+rm(SR_data, l_SR)
+gc()
+
+adrenal_whole$SR
+adrenal_whole$SR@meta.data
+```
+
+
+
