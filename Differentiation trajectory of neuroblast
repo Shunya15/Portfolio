@@ -2,6 +2,13 @@ Title: "Differentiation trajectory of the sympathoadrenal cell lineage"
 output: html_document
 Data from "Single-cell transcriptomic analyses provide insights into the developmental origins of neuroblastoma"
 
+```{r}
+#Load packages 
+library(Seurat)
+library(SeuratData)
+library(patchwork)
+library(tidyverse)
+
 #install.packages("Seurat")
 #install.packages("tidyverse")
 library(dplyr)
