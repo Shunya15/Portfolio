@@ -1,1 +1,128 @@
+Title: "Differentiation trajectory of the sympathoadrenal cell lineage"
+output: html_document
+Data from "Single-cell transcriptomic analyses provide insights into the developmental origins of neuroblastoma"
 
+#install.packages("Seurat")
+#install.packages("tidyverse")
+library(dplyr)
+library(patchwork)
+library(Seurat)
+adrenal_medulla_Seurat <- readRDS("~/Jansky/adrenal_medulla_Seurat.RDS")
+# adrenal_medulla_Seurat[["percent.mt"]] <- PercentageFeatureSet(adrenal_medulla_Seurat, pattern = "^MT-")
+head(adrenal_medulla_Seurat@meta.data, 5)
+# Visualize QC metrics as a violin plot
+VlnPlot(adrenal_medulla_Seurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt" ), ncol = 3)
+#visualise feature-feature relationships
+plot1 <- FeatureScatter(adrenal_medulla_Seurat, feature1 = "nCount_RNA", feature2 = "percent.mt")
+plot2 <- FeatureScatter(adrenal_medulla_Seurat, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+plot1 + plot2
+adrenal.medulla <- subset(adrenal_medulla_Seurat, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 5)
+##Normalising data
+
+adrenal.medulla <- NormalizeData(adrenal.medulla, normalization.method = "LogNormalize", scale.factor = 10000)
+adrenal.medulla<- NormalizeData(adrenal.medulla)
+##Identification of highly variable features
+
+#high cell to cell variation in the dataset
+adrenal.medulla <-FindVariableFeatures(adrenal.medulla, selection.method = "vst", nfeatures = 2000)
+#identify the 10 most highly variable genes
+top10 <- head(VariableFeatures(adrenal.medulla), 10)
+#plot variable features with and without labels 
+plot1 <- VariableFeaturePlot(adrenal.medulla)
+plot2 <- LabelPoints(plot = plot1, points = top10, repel = TRUE)
+plot1 + plot2 
+##Scaling the data
+
+all.genes <- rownames(adrenal.medulla)
+adrenal.medulla <- ScaleData(adrenal.medulla, features = all.genes)
+##Perform linear dimensional reduction
+
+adrenal.medulla <-RunPCA(adrenal.medulla, features = VariableFeatures(object = adrenal.medulla))
+# Examine and visualize PCA results a few different ways
+print(adrenal.medulla[["pca"]], dims = 1:5, nfeatures = 5)
+VizDimLoadings(adrenal.medulla, dims = 1:2, reduction = "pca")
+DimPlot(adrenal.medulla, reduction = "pca")
+##Determine the 'dimensionality' of the dataset
+
+adrenal.medulla <- JackStraw(adrenal.medulla, num.replicate = 100)
+adrenal.medulla <-ScoreJackStraw(adrenal.medulla, dims = 1:20)
+JackStrawPlot(adrenal.medulla, dims = 1:15)
+ElbowPlot(adrenal.medulla)
+adrenal.medulla <- FindNeighbors(adrenal.medulla, dims = 1:10)
+adrenal.medulla <-FindClusters(adrenal.medulla, resolution = 0.5)
+head(Idents(adrenal.medulla), 5)
+##Run non-linear dimensional reduction
+
+adrenal.medulla <- RunUMAP(adrenal.medulla, dims = 1:10)
+#indivisual clusters
+DimPlot(adrenal.medulla, reduction = "umap")
+saveRDS(adrenal.medulla, file = "UAMP_plot_Jansky.rds")
+##Finding differentially expressed features
+
+cluster2.markers <- FindMarkers(adrenal.medulla, ident.1 = 2, min.pct = 0.25)
+head(cluster2.markers, n=10)
+cluster5.markers <- FindMarkers(adrenal.medulla, ident.1 = 5, ident.2 = c(0, 3), min.pct = 0.25)
+head(cluster5.markers, n = 5)
+# find markers for every cluster compared to all remaining cells, report only the positive
+adrenal.markers <- FindAllMarkers(adrenal.medulla, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+adrenal.markers %>%
+    group_by(cluster) %>%
+    slice_max(n = 2, order_by = avg_log2FC)
+cluster0.markers <- FindMarkers(adrenal.medulla, ident.1 = 0, logfc.threshold = 0.25, test.use = "roc", only.pos = TRUE)
+VlnPlot(adrenal.medulla, features = c("SOX10", "TH", "PHOX2B"))
+FeaturePlot(adrenal.medulla, features = c("SOX10", "TH", "PHOX2B", "PRPH", "DBH", "FOXD3"))
+FeaturePlot(adrenal.medulla, features = c("MKI67","ELAVL4","ISL1", "PRPH", "SOX10", "PLP1", "CHGA", "PNMT"))
+adrenal.markers %>%
+    group_by(cluster) %>%
+    top_n(n = 10, wt = avg_log2FC) -> top10
+DoHeatmap(adrenal.medulla, features = top10$gene) + NoLegend()
+##Assigning cell type identity to clusters
+
+label <- head(VariableFeatures(adrenal.medulla), 10)
+plot3 <- DimPlot(adrenal.medulla, reduction = "umap", label = TRUE, pt.size = 0.5) 
+plot4 <- LabelPoints(plot = plot3, points = label, repel = TRUE)
+plot3 + plot4
+new.cluster.ids <- c("Late SCPs", "SCPs", "Cycling SCPs", "Bridge", "Connecting progenitor cells", "Chromaffin cells", "Late chromaffin cells", "Cycling neuroblast", "Late neuroblasts", "Neuroblasts", "Late neuroblasts")
+names(x = new.cluster.ids) <- levels(adrenal_medulla_Seurat)
+adrenal.medulla <- RenameIdents(object = adrenal_medulla_Seurat, new.cluster.ids)
+DimPlot(adrenal.medulla, reduction = "umap", label = TRUE, pt.size = 0.5) + NoLegend()
+levels(adrenal.medulla)
+#Load packages 
+library(Seurat)
+library(SeuratData)
+library(patchwork)
+library(tidyverse)
+#Load dataset
+#Jansky 
+Jansky_adrenal <- readRDS("~/Integrated (Jansky & Aadameyko)/Jansky_adrenal.RDS")
+#Adameyko
+Adameyko_adrenal <- readRDS("~/Integrated (Jansky & Aadameyko)/Adameyko_adrenal.rds")
+#Integrate Jansky & Adameyko dataset
+#[[1]] is Adameyko dataset
+#[[2]] is Jansky dataset
+Integraed <- list(Adameyko_adrenal, Jansky_adrenal)
+#Normalize and identify variable features for each dataset independently
+Integraed <- lapply(X = Integraed, FUN = function(x) {
+    x <- NormalizeData(x)
+    x <- FindVariableFeatures(x, selection.method = "vst", nfeatures = 2000)
+})
+#Select features that are repeatedly variable across datasets for integration
+features <- SelectIntegrationFeatures(object.list = Integraed)
+features %>% unique()
+##Perform integration
+
+Integrated.anchors <- FindIntegrationAnchors(object.list = Integraed, anchor.features = features)
+#Create integrated data assay
+Integrated.assay <- IntegrateData(anchorset = Integrated.anchors)
+DefaultAssay(Integrated.assay) <- "integrated"
+# Run the standard workflow for visualization and clustering
+Integrated.assay <- ScaleData(Integrated.assay, verbose = FALSE)
+Integrated.assay <- RunPCA(Integrated.assay, npcs = 30, verbose = FALSE)
+Integrated.assay <- RunUMAP(Integrated.assay, reduction = "pca", dims = 1:30)
+Integrated.assay <- FindNeighbors(Integrated.assay, reduction = "pca", dims = 1:30)
+Integrated.assay <- FindClusters(Integrated.assay, resolution = 0.5)
+#Make DimPlot 
+p1 <- DimPlot(Integrated.assay, reduction = "umap", group.by = "fate")
+p1
+p2 <- DimPlot(Integrated.assay, reduction = "umap", label = TRUE, repel = TRUE)
+p1 + p2
