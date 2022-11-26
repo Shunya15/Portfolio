@@ -1,0 +1,81 @@
+---
+title: "a1807015_Assignment1"
+author: "Shunya Asanuma"
+date: '2022-08-07'
+output: html_notebook
+---
+
+# Research questions
+
+##### 1. Two common file types are .csv and .tsv. What is the difference between the two, and can you suggest a function for loading a .tsv file into R? [3 marks]
+
+    ->.csv stands for Comma Separated Values. Each value in a file is separated from the next by a comma. (read_csv() is used to load a .csv file into R.)
+
+    .tsv stands for Tab Separated Values. Each value in a file is separated from the next by a tab character. read_tsv() can be used to load a .tsv file into R. You can also use read.table(). e.g.) read.table(file = ‘file_name.tsv’)
+
+    .csv is more common than .tsv. 
+
+##### 2.Three types of message commonly seen in the R Console are 1) error messages, 2) warnings and 3) general messages. Briefly describe the importance of each type of message and what information they are conveying. [3 marks]
+
+      -> 1) Error messages appear when the code that you are trying to run does not work. For example, when you misspell a variable name, incorrectly capitalised a variable name. The code will work by following and fixing your code.
+      
+      2)  Warning messages appear when you have a potential issue(s) but the code still can work. In this assignment, "Warning: Removed 1 rows containing non-finite values (stat_boxplot). " was appeared. In my original data (.csv), there was an encoded missing value and I changed that into NA. The warning message was shown due to the NA, but it was not problem. The message might contribute to preventing misunderstandings or oversights. 
+      
+      3)  General messages appear when R give us more information about your output.Unlike error (1) or warning (2), general messages provide ‘simple’ diagnostic messages.
+
+##### 3. What is the difference between an integer and a floating point value? Floats are sometimes called "doubles". What does this mean? [2 marks]
+
+      ->Integer is a number that is not a fraction, a whole number such as 1,2 and 3. Floating point values are fractional, non-integer numbers such as 1.234 and 0.123. Floating numbers are usually represented with 32bits or 64bits. Based on IEEE standard, 32bits is defined and called single precision. Therefore, 64bits is called doubles or double presicion. 
+
+# Tasks in R
+
+-load packages
+
+```{r}
+library(tidyverse)
+library(pander)
+```
+
+-Using the GUI to load data and removing all comments blank rows and changing any encoded missing values to NA
+
+```{r}
+dCt_values <- read_csv("~/Assignment_1/a1807015.csv", skip = 3, na = "#N/A", col_types = "ccnnnn" )
+```
+
+-Remove the column 1 (Replicate1,2...)
+
+```{r}
+dCt_values <- select(dCt_values, -1)
+dCt_values
+```
+
+-Converting from wide to long form
+
+```{r}
+dCt_long <- dCt_values %>% pivot_longer(-Gene, names_to = "Treatment", values_to = "dCt")
+dCt_long
+```
+
+-Extract the CellType and Treatment information from the sample names, placing them in separate columns. By adding the cols argument -Gene telling pivot_longer to ignore the Gene column when gathering up the data.
+
+```{r}
+dCt_long <- dCt_long %>%
+separate(Treatment, into = c("CellType", "Treatment"), sep = "_")
+dCt_long
+```
+
+-Making a boxplot for each of the four conditions.
+
+```{r}
+ggplot(dCt_long, aes(x =CellType, y = dCt, fill = Treatment)) +
+  geom_boxplot() +
+labs(title = "dCt values for SEPT9 in Liver & Kidney cells", subtitle = "dCt value categorised by treatment", x = "Cell Type", y = "dCt Value") 
+```
+
+-Conduct a simple linear regression using the model dCt\~CellType + Treatment + CellType:Treatment and place these as formatted tables
+
+```{r}
+model_fit <- lm(dCt~CellType + Treatment + CellType:Treatment, data = dCt_long)
+summary(model_fit)
+model_fit %>% summary() %>% pander()
+```
