@@ -1,0 +1,203 @@
+---
+title: "Jansky et.al Seurat"
+output: html_document
+date: "2022-09-19"
+---
+
+```{r}
+#install.packages("Seurat")
+#install.packages("tidyverse")
+```
+
+```{r}
+library(dplyr)
+library(patchwork)
+library(Seurat)
+```
+
+
+
+```{r}
+adrenal_medulla_Seurat <- readRDS("~/Jansky/adrenal_medulla_Seurat.RDS")
+# adrenal_medulla_Seurat[["percent.mt"]] <- PercentageFeatureSet(adrenal_medulla_Seurat, pattern = "^MT-")
+```
+
+```{r}
+head(adrenal_medulla_Seurat@meta.data, 5)
+```
+
+```{r}
+# Visualize QC metrics as a violin plot
+VlnPlot(adrenal_medulla_Seurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt" ), ncol = 3)
+```
+
+```{r}
+#visualise feature-feature relationships
+plot1 <- FeatureScatter(adrenal_medulla_Seurat, feature1 = "nCount_RNA", feature2 = "percent.mt")
+plot2 <- FeatureScatter(adrenal_medulla_Seurat, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+plot1 + plot2
+```
+
+```{r}
+adrenal.medulla <- subset(adrenal_medulla_Seurat, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 5)
+```
+
+##Normalising data
+
+```{r}
+adrenal.medulla <- NormalizeData(adrenal.medulla, normalization.method = "LogNormalize", scale.factor = 10000)
+```
+
+```{r}
+adrenal.medulla<- NormalizeData(adrenal.medulla)
+```
+
+##Identification of highly variable features
+
+```{r}
+#high cell to cell variation in the dataset
+adrenal.medulla <-FindVariableFeatures(adrenal.medulla, selection.method = "vst", nfeatures = 2000)
+
+#identify the 10 most highly variable genes
+top10 <- head(VariableFeatures(adrenal.medulla), 10)
+
+#plot variable features with and without labels 
+plot1 <- VariableFeaturePlot(adrenal.medulla)
+plot2 <- LabelPoints(plot = plot1, points = top10, repel = TRUE)
+plot1 + plot2 
+```
+
+##Scaling the data
+
+```{r}
+all.genes <- rownames(adrenal.medulla)
+adrenal.medulla <- ScaleData(adrenal.medulla, features = all.genes)
+```
+
+##Perform linear dimensional reduction
+
+```{r}
+adrenal.medulla <-RunPCA(adrenal.medulla, features = VariableFeatures(object = adrenal.medulla))
+```
+
+```{r}
+# Examine and visualize PCA results a few different ways
+print(adrenal.medulla[["pca"]], dims = 1:5, nfeatures = 5)
+```
+
+```{r}
+VizDimLoadings(adrenal.medulla, dims = 1:2, reduction = "pca")
+```
+
+```{r}
+DimPlot(adrenal.medulla, reduction = "pca")
+```
+
+##Determine the 'dimensionality' of the dataset
+
+```{r}
+adrenal.medulla <- JackStraw(adrenal.medulla, num.replicate = 100)
+adrenal.medulla <-ScoreJackStraw(adrenal.medulla, dims = 1:20)
+```
+
+```{r}
+JackStrawPlot(adrenal.medulla, dims = 1:15)
+```
+
+```{r}
+ElbowPlot(adrenal.medulla)
+```
+
+```{r}
+adrenal.medulla <- FindNeighbors(adrenal.medulla, dims = 1:10)
+adrenal.medulla <-FindClusters(adrenal.medulla, resolution = 0.5)
+```
+
+```{r}
+head(Idents(adrenal.medulla), 5)
+```
+
+##Run non-linear dimensional reduction
+
+```{r}
+adrenal.medulla <- RunUMAP(adrenal.medulla, dims = 1:10)
+```
+
+```{r}
+#indivisual clusters
+DimPlot(adrenal.medulla, reduction = "umap")
+```
+
+```{r}
+saveRDS(adrenal.medulla, file = "UAMP_plot_Jansky.rds")
+```
+
+##Finding differentially expressed features
+
+```{r}
+cluster2.markers <- FindMarkers(adrenal.medulla, ident.1 = 2, min.pct = 0.25)
+head(cluster2.markers, n=10)
+```
+
+```{r}
+cluster5.markers <- FindMarkers(adrenal.medulla, ident.1 = 5, ident.2 = c(0, 3), min.pct = 0.25)
+head(cluster5.markers, n = 5)
+```
+
+```{r}
+# find markers for every cluster compared to all remaining cells, report only the positive
+adrenal.markers <- FindAllMarkers(adrenal.medulla, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+adrenal.markers %>%
+    group_by(cluster) %>%
+    slice_max(n = 2, order_by = avg_log2FC)
+```
+
+```{r}
+cluster0.markers <- FindMarkers(adrenal.medulla, ident.1 = 0, logfc.threshold = 0.25, test.use = "roc", only.pos = TRUE)
+```
+
+```{r}
+VlnPlot(adrenal.medulla, features = c("SOX10", "TH", "PHOX2B"))
+```
+
+```{r}
+FeaturePlot(adrenal.medulla, features = c("SOX10", "TH", "PHOX2B", "PRPH", "DBH", "FOXD3"))
+```
+
+```{r}
+FeaturePlot(adrenal.medulla, features = c("MKI67","ELAVL4","ISL1", "PRPH", "SOX10", "PLP1", "CHGA", "PNMT"))
+```
+
+
+```{r}
+adrenal.markers %>%
+    group_by(cluster) %>%
+    top_n(n = 10, wt = avg_log2FC) -> top10
+DoHeatmap(adrenal.medulla, features = top10$gene) + NoLegend()
+```
+
+##Assigning cell type identity to clusters
+
+```{r}
+label <- head(VariableFeatures(adrenal.medulla), 10)
+plot3 <- DimPlot(adrenal.medulla, reduction = "umap", label = TRUE, pt.size = 0.5) 
+plot4 <- LabelPoints(plot = plot3, points = label, repel = TRUE)
+plot3 + plot4
+```
+
+
+```{r}
+new.cluster.ids <- c("Late SCPs", "SCPs", "Cycling SCPs", "Bridge", "Connecting progenitor cells", "Chromaffin cells", "Late chromaffin cells", "Cycling neuroblast", "Late neuroblasts", "Neuroblasts", "Late neuroblasts")
+names(x = new.cluster.ids) <- levels(adrenal_medulla_Seurat)
+adrenal.medulla <- RenameIdents(object = adrenal_medulla_Seurat, new.cluster.ids)
+DimPlot(adrenal.medulla, reduction = "umap", label = TRUE, pt.size = 0.5) + NoLegend()
+```
+
+```{r}
+levels(adrenal.medulla)
+```
+
+```{r}
+
+```
+
